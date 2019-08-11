@@ -27,16 +27,56 @@ module.exports = {
             return response.json(searchedUser);
         } else {
 
-            const githubResponse = await axios.get(`https://api.github.com/users/${username}`);
-            const { name, bio, avatar_url: avatar_address } = githubResponse.data;
-            const newDeveloper = await Developer.create({
-                name,
-                username,
-                bio,
-                avatar_address
-            });
+            const githubResponse = await axios.get(`https://api.github.com/users/${username}`)
+                .catch(function (error) {
+                    var errorMessage = ': Something went wrong in the server.';
+                    var clientStatus = 503;
+                    var serverStatus = 404;
+                    if (error.response) {
+                        clientStatus = 400;
+                        serverStatus = error.response.status;
+                        errorMessage = `: ${error.message}`;
+                    } else if (error.request) {
+                        errorMessage = `: Request to Github Timed out`;
+                        clientStatus = 500;
+                    } else {
+                        errorMessage = `: ${error.message}`;
+                        clientStatus = 500;
+                        serverStatus = 500;
+                    }
+                    console.log('Error', serverStatus, errorMessage);
+                    response.status(clientStatus);
+                    return response.json({ error: `Code ${clientStatus} ${errorMessage}`});
+                });
 
-            return response.json(newDeveloper);
+            if (githubResponse) {
+                const { name, bio, avatar_url: avatar_address } = githubResponse.data;
+
+                if (!name) var _name = username;
+                else var _name = name;
+
+                const newDeveloper = await Developer.create({
+                    name: _name,
+                    username,
+                    bio,
+                    avatar_address
+                }).catch(function (error) {
+                    var errorMessage = ': Something went wrong in the server.';
+                    var serverStatus = 404;
+                    if (error.response) {
+                        serverStatus = error.response.status;
+                        errorMessage = `: ${error.message}`;
+                    } else if (error.request)
+                        errorMessage = `: Request to Database Timed out`;
+                    else
+                        errorMessage = error.message;
+                    console.log('Error', serverStatus, errorMessage);
+                    response.status(500);
+                    return response.json();
+                });
+
+                return response.json(newDeveloper);
+            }
         }
     }
 }
